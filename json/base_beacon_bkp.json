@@ -1,0 +1,40 @@
+[{
+  "deviceInfo": {
+    "deviceType": "Amazon Workspaces",
+    "deviceId": "",
+    "deviceName": ""
+  },
+  "versionInfo": {
+    "hardwareVersion": "Microsoft Corp",
+    "firmwareVersion": "Amazon Workspaces",
+    "softwareVersion": "Build20.4",
+    "operatingSystemVersion": "Windows10"
+  },
+  "customEvents": [{
+    "timestamp": 1589557452655,
+    "eventType": "Infra Monitoring",
+    "eventSummary": "CPU, Memory and Disk Metrics",
+    "doubleProperties": {
+      "CPU": 1,
+      "Memory": 1,
+      "Disk": 1
+    },
+    "stringProperties": {
+      "USERNAME": "",
+      "USERDNSDOMAIN": "",
+      "TPICAPUSERLOCATION": "",
+      "TPICAPLOCATION": "",
+      "TPICAPUSERREGION": "",
+      "TPICAPREGION": "",
+      "TPICAPSITE": "",
+      "LOGONSERVER": "",
+      "TPICAPUSERSITE": "",
+      "NUMBER_OF_PROCESSORS": "",
+      "STXHD_INSTANCE_ID": "",
+      "STXHD_ACCOUNT_ID": "",
+      "STXHD_REGION": "",
+      "PROCESSOR_REVISION": "",
+      "PROCESSOR_LEVEL": ""
+    }
+  }]
+}]

@@ -1,0 +1,38 @@
+[{
+  "deviceInfo": {
+    "deviceType": "Amazon Workspaces",
+    "deviceId": "",
+    "deviceName": ""
+  },
+  "versionInfo": {
+    "hardwareVersion": "Microsoft Corp",
+    "firmwareVersion": "Amazon Workspaces",
+    "softwareVersion": "Build20.4",
+    "operatingSystemVersion": "Windows10"
+  },
+  "customEvents": [{
+    "timestamp": 1589557452655,
+    "eventType": "Top CPU Procs",
+    "eventSummary": "Top 5 processes consuming CPU",
+    "stringProperties": {
+      "cpu1_process": "",
+      "cpu2_process": "",
+      "cpu3_process": "",
+      "cpu4_process": "",
+      "cpu5_process": "",
+      "cpu1_id": "",
+      "cpu2_id": "",
+      "cpu3_id": "",
+      "cpu4_id": "",
+      "cpu5_id": "",
+      "USERNAME": ""
+    },
+    "doubleProperties": {
+      "cpu1_value": 1,
+      "cpu2_value": 1,
+      "cpu3_value": 1,
+      "cpu4_value": 1,
+      "cpu5_value": 1
+    }
+  }]
+}]

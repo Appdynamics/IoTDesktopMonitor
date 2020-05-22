@@ -1,0 +1,41 @@
+[{
+  "deviceInfo": {
+    "deviceType": "Amazon Workspaces",
+    "deviceId": "",
+    "deviceName": ""
+  },
+  "versionInfo": {
+    "hardwareVersion": "Microsoft Corp",
+    "firmwareVersion": "Amazon Workspaces",
+    "softwareVersion": "Build20.4",
+    "operatingSystemVersion": "Windows10"
+  },
+  
+  "customEvents": [{
+    "timestamp": 1589557452655,
+    "eventType": "Windows Events",
+    "eventSummary": "Windows Events",
+    "stringProperties": {
+      "event_id": "",
+      "event_machine_name": "",
+      "event_data": "",
+      "event_index": "",
+      "event_category": "",
+      "event_category_number": "",
+      "event_entry_type": "",
+      "event_message": "",
+      "event_source": "",
+      "event_replacement_string": "",
+      "event_instance_id": "",
+      "event_username": "",
+      "event_site": "",
+      "event_container": "",
+      "USERNAME": ""
+      
+    },
+    "datetimeProperties": {
+      "event_time_generated": 1,
+      "event_time_written": 1
+    }
+  }]
+}]

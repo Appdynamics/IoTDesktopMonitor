@@ -1,0 +1,39 @@
+[{
+  "deviceInfo": {
+    "deviceType": "Amazon Workspaces",
+    "deviceId": "",
+    "deviceName": ""
+  },
+  "versionInfo": {
+    "hardwareVersion": "Microsoft Corp",
+    "firmwareVersion": "Amazon Workspaces",
+    "softwareVersion": "Build20.4",
+    "operatingSystemVersion": "Windows10"
+  },
+
+  "customEvents": [{
+    "timestamp": 1589557452655,
+    "eventType": "Top Mem Procs",
+    "eventSummary": "Top 5 processes consuming Memory",
+    "stringProperties": {
+      "mem1_process": "",
+      "mem2_process": "",
+      "mem3_process": "",
+      "mem4_process": "",
+      "mem5_process": "",
+      "mem1_id": "",
+      "mem2_id": "",
+      "mem3_id": "",
+      "mem4_id": "",
+      "mem5_id": "",
+      "USERNAME": ""
+    },
+    "doubleProperties": {
+      "mem1_value": 1,
+      "mem2_value": 1,
+      "mem3_value": 1,
+      "mem4_value": 1,
+      "mem5_value": 1
+    }
+  }]
+}]

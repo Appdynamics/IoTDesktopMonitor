@@ -1,0 +1,12 @@
+{
+    "key": "EUM-AAB-AUM",
+    "url": "http://controller204-2040noss-rmqbqgqi.appd-cx.com:7001",
+    "event_log_source": [{
+            "Application": ["license", "test"]
+        },
+        {
+            "System": ["license"]
+        }
+    ],
+    "interval_mins": 1
+}
