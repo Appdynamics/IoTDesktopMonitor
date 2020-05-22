@@ -16,25 +16,23 @@
     "eventSummary": "CPU, Memory and Disk Metrics",
     "doubleProperties": {
       "CPU": 1,
-      "Memory": 1,
-      "Disk": 1
+      "MemoryUsagePercent": 1,
+      "MemoryTotalSizeGB": 1,
+      "MemoryFreeSizeGB": 1,
+      "DiskFreeSpaceGB": 1,
+      "DiskCapacityGB": 1
     },
     "stringProperties": {
       "USERNAME": "",
       "USERDNSDOMAIN": "",
-      "TPICAPUSERLOCATION": "",
-      "TPICAPLOCATION": "",
-      "TPICAPUSERREGION": "",
-      "TPICAPREGION": "",
-      "TPICAPSITE": "",
-      "LOGONSERVER": "",
-      "TPICAPUSERSITE": "",
+      "USERLOCATION": "",
+      "USERSITE": "",
+      "STXHD_ACCOUNT" : "",
       "NUMBER_OF_PROCESSORS": "",
-      "STXHD_INSTANCE_ID": "",
-      "STXHD_ACCOUNT_ID": "",
-      "STXHD_REGION": "",
-      "PROCESSOR_REVISION": "",
-      "PROCESSOR_LEVEL": ""
+      "PROCESSOR_LEVEL": "",
+      "STXHD_PERFORMANCE": "",
+      "LOGONSERVER": ""
+
     }
   }]
 }]

@@ -25,28 +25,39 @@ $unix_timestamp = $now | ConvertTo-UnixTimestamp
 
 # $status_code = (Invoke-WebRequest -Uri "$($config_json.url)/eumcollector/iot/v1/application/$($config_json.key)/enabled").StatusCode
 
-$this_host = $env:computername
+$desktop_details = Get-WmiObject  -Class win32_operatingsystem  -ErrorAction SilentlyContinue 
+$memory_cal = ((($desktop_details.TotalVisibleMemorySize - $desktop_details.FreePhysicalMemory)*100)/ $desktop_details.TotalVisibleMemorySize)
 
-$DesktopDetails = Get-WmiObject  -Class win32_operatingsystem  -ErrorAction SilentlyContinue 
-$Memory = ((($DesktopDetails.TotalVisibleMemorySize - $DesktopDetails.FreePhysicalMemory)*100)/ $DesktopDetails.TotalVisibleMemorySize)
-$memory_utilisation = [math]::Round($Memory, 2)
+$memory_utilisation = [math]::Round($memory_cal, 2)
 
-$disk_utilisation = (Get-WmiObject -Class Win32_logicaldisk -Filter "DeviceID = 'C:'"  -ErrorAction SilentlyContinue `
-                    | Select-Object name,freespace,size,@{Name='util';Expression={($_.freespace / $_.size)*100}}).util
+$total_visible_memorySize =  $desktop_details | Measure-Object -Property TotalVisibleMemorySize -Sum | ForEach-Object {[Math]::Round($_.sum/1024/1024)}
 
+$free_physical_memory = $desktop_details | Measure-Object -Property FreePhysicalMemory -Sum | ForEach-Object {[Math]::Round($_.sum/1024/1024)}
 
-Write-Host "Taking 5 samples of CPU utilisation at 2 sec interval. This will take approximately 11 seconds to execute `n" -ForegroundColor Yellow
+#let's do the %tage calc in AppD 
+#$disk_utilisation = (Get-WmiObject -Class Win32_logicaldisk -Filter "DeviceID = 'C:'"  -ErrorAction SilentlyContinue `
+#                    | Select-Object name,freespace,size,@{Name='util';Expression={($_.freespace / $_.size)*100}}).util
 
-# Make the Call ones per excution
+$drive_c = Get-WmiObject -Class Win32_logicaldisk -Filter "DeviceID = 'C:'"  -ErrorAction SilentlyContinue `
+           | Select-Object -Property DeviceID, DriveType, VolumeName, 
+            @{L='FreeSpaceGB';E={"{0:N2}" -f ($_.FreeSpace /1GB)}},
+            @{L="Capacity";E={"{0:N2}" -f ($_.Size/1GB)}}
+
+$disk_free = $drive_c.FreeSpaceGB
+
+$disk_capacity = $drive_c.Capacity
+                    
+
+Write-Host "`n Taking 5 samples of CPU utilisation at 2 sec interval. This will take approximately 11 seconds to execute `n" -ForegroundColor Yellow
+Write-Host "Please wait... `n" -ForegroundColor Yellow
+
+# Make the Call ones per excution for optimal performance - top processes will also be derived from this result. 
+
 $cpu_util_call = Get-Counter "\Process(*)\% Processor Time" -SampleInterval 2 -MaxSamples 5  -ErrorAction SilentlyContinue `
                  | Select-Object -ExpandProperty CounterSamples `
                  | Where-Object {$_.Status -eq 0 -and $_.instancename -notin "_total", "idle"} 
 
 $cpu_utilisation = ($cpu_util_call | Select-Object -ExpandProperty CookedValue | Measure-Object -Average).average.ToString("P")    
-
-#$cpu_utilisation = (GET-COUNTER -Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -MaxSamples 5 `
- #                  | Select-Object -ExpandProperty countersamples `
- #                  | Select-Object -ExpandProperty cookedvalue | Measure-Object -Average).average
  
 Write-Host "Average of CPU usage (calculated with 5 Sample with interval of 2 sec) $cpu_utilisation `n"  -ForegroundColor Yellow
 
@@ -64,9 +75,6 @@ $top_mem_processes = Get-Process | Sort-Object -Descending WS `
                     | Select-Object -First 5 `
                     | Select-Object name, description, id, @{l = "Private Memory (MB)"; e = { ([math]::Round($_.privatememorysize/1Mb,2)) } }
 
-#Gloabl variables
-$lastbootuptime = $DesktopDetails | Select-Object @{label='LastRestart';expression={$_.ConvertToDateTime($_.LastBootUpTime)}}
-$lastbootuptime = $lastbootuptime.LastRestart 
 
 function PrepValue($var){
     #Because AppD IoT platform doesn't like "" or null. 
@@ -77,12 +85,18 @@ function PrepValue($var){
     return $var
 }
 
+#Gloabl variable initialisations...
+
+$lastbootuptime = $desktop_details | Select-Object @{label='LastRestart';expression={$_.ConvertToDateTime($_.LastBootUpTime)}}
+$lastbootuptime = $lastbootuptime.LastRestart 
+
 $NUMBER_OF_PROCESSORS = $env:NUMBER_OF_PROCESSORS
 $OS = $env:OS
 $COMPUTERNAME = PrepValue($env:COMPUTERNAME)
 $STXHD_INSTANCE_ID = PrepValue($env:STXHD_INSTANCE_ID)
 $STXHD_ACCOUNT_ID = PrepValue($env:STXHD_ACCOUNT_ID)
 $STXHD_REGION = PrepValue($env:STXHD_REGION)
+$STXHD_PERFORMANCE = PrepValue($env:STXHD_PERFORMANCE)
 $PROCESSOR_REVISION = PrepValue($env:PROCESSOR_REVISION)
 $PROCESSOR_LEVEL = PrepValue($env:PROCESSOR_LEVEL)
 $USERNAME = PrepValue($env:USERNAME)
@@ -93,13 +107,18 @@ $TPICAPUSERREGION = PrepValue($env:TPICAPUSERREGION)
 $TPICAPREGION = PrepValue($env:TPICAPREGION)
 $TPICAPSITE = PrepValue($env:TPICAPSITE)
 $LOGONSERVER = PrepValue($env:LOGONSERVER)
+$LOGONSERVER = $LOGONSERVER  -replace "\\","" #Strip \\ coz AppD IoT platform doesn't like it. 
 $TPICAPUSERSITE = PrepValue($env:TPICAPUSERSITE)
 
-$deviceID = $COMPUTERNAME + "_" + ${env:STXHD_INSTANCE_ID}
+$deviceID = $COMPUTERNAME + "_" + ${$env:TPICAPSITE}
 #$deviceName = $COMPUTERNAME + "_" + ${env:$USERNAME}
-$os_details  =  "OS:" + $OS +". BuildNumber:"+ $DesktopDetails.BuildNumber +". BuildType:"+ $DesktopDetails.BuildType 
-$hardware_serial_number = "SN:"+ $DesktopDetails.SerialNumber
+$os_details  =  "OS:" + $OS +". BuildNumber:"+ $desktop_details.BuildNumber +". BuildType:"+ $desktop_details.BuildType 
+$hardware_serial_number = "SN:"+ $desktop_details.SerialNumber
 $processor_info = "Processor Info - Core:" + $NUMBER_OF_PROCESSORS + ". Revision:" + $PROCESSOR_REVISION + ". Level:$PROCESSOR_LEVEL"
+
+$user_location = "TPICAPUSERLOCATION: $TPICAPUSERLOCATION TPICAPLOCATION: $TPICAPLOCATION . TPICAPUSERREGION: $TPICAPUSERREGION . TPICAPREGION: $TPICAPREGION  TPICAPSITE: $TPICAPSITE "
+#https://safebreach.com/Post/Amazon-Workspaces-Unquoted-Search-Path-and-Potential-Abuses
+$stxhd_details = "STXHD_ACCOUNT_ID: $STXHD_ACCOUNT_ID . STXHD_INSTANCE_ID: $STXHD_INSTANCE_ID . STXHD_REGION: $STXHD_REGION " 
 
 $a = Get-Content "$($base_location)/json/base_beacon.json" -raw | ConvertFrom-Json
 
@@ -111,29 +130,39 @@ $a.versionInfo.hardwareVersion = $hardware_serial_number
 $a.versionInfo.softwareVersion = $os_details
 $a.versionInfo.firmwareVersion = $processor_info
 
+$a.customEvents.doubleProperties.MemoryUsagePercent = $memory_utilisation
+$a.customEvents.doubleProperties.MemoryTotalSizeGB = $total_visible_memorySize
+$a.customEvents.doubleProperties.MemoryFreeSizeGB = $free_physical_memory
+
+$a.customEvents.doubleProperties.DiskFreeSpaceGB = $disk_free
+$a.customEvents.doubleProperties.DiskCapacityGB = $disk_capacity
+
 $a.customEvents.doubleProperties.CPU = [double]($cpu_utilisation -replace "%", "")
-$a.customEvents.doubleProperties.Memory = $memory_utilisation
-$a.customEvents.doubleProperties.Disk = $disk_utilisation
 
 $a.customevents.timestamp = $unix_timestamp
 
 $a.customEvents.stringProperties.USERNAME = $USERNAME
+$a.customEvents.stringProperties.USERDNSDOMAIN = $USERDNSDOMAIN
+$a.customEvents.stringProperties.USERLOCATION = $user_location
+$a.customEvents.stringProperties.USERSITE = $TPICAPUSERSITE
+$a.customEvents.stringProperties.STXHD_ACCOUNT = $stxhd_details
+$a.customEvents.stringProperties.PROCESSOR_LEVEL = $PROCESSOR_LEVEL
+$a.customEvents.stringProperties.NUMBER_OF_PROCESSORS = $NUMBER_OF_PROCESSORS 
+$a.customEvents.stringProperties.LOGONSERVER = $LOGONSERVER
+$a.customEvents.stringProperties.STXHD_PERFORMANCE = $STXHD_PERFORMANCE
 
-#$a.customEvents.stringProperties.TPICAPUSERLOCATION = $TPICAPUSERLOCATION
-#$a.customEvents.stringProperties.USERDNSDOMAIN = $USERDNSDOMAIN
-#$a.customEvents.stringProperties.TPICAPLOCATION = $TPICAPLOCATION
+#$a.customEvents.stringProperties.PROCESSOR_REVISION = $PROCESSOR_REVISION
+#$a.customEvents.stringProperties.TPICAPLOCATION = $TPICAPLOCATION 
 #$a.customEvents.stringProperties.TPICAPUSERREGION = $TPICAPUSERREGION
 #$a.customEvents.stringProperties.TPICAPREGION = $TPICAPREGION
 #$a.customEvents.stringProperties.TPICAPSITE = $TPICAPSITE
 #$a.customEvents.stringProperties.LOGONSERVER = $LOGONSERVER
-#$a.customEvents.stringProperties.TPICAPUSERSITE = $TPICAPUSERSITE
 
 #$a.customEvents.stringProperties.NUMBER_OF_PROCESSORS = $NUMBER_OF_PROCESSORS 
 #$a.customEvents.stringProperties.STXHD_INSTANCE_ID = $STXHD_INSTANCE_ID
 #$a.customEvents.stringProperties.STXHD_ACCOUNT_ID = $STXHD_ACCOUNT_ID
-#$a.customEvents.stringProperties.PROCESSOR_REVISION = $PROCESSOR_REVISION
+
 #$a.customEvents.stringProperties.STXHD_REGION = $STXHD_REGION
-#$a.customEvents.stringProperties.PROCESSOR_LEVEL = $PROCESSOR_LEVEL
 
 $a | ConvertTo-Json -Compress -Depth 3 | set-content "$($base_location)/json/base_beacon_new.json"
 
@@ -168,7 +197,6 @@ $b.customevents.timestamp = $unix_timestamp
 $b.customEvents.stringProperties.USERNAME = $USERNAME
 
 #Max 16 metrics are allowed
-
 #$b.customEvents.stringProperties.TPICAPUSERLOCATION = $TPICAPUSERLOCATION
 #$b.customEvents.stringProperties.USERDNSDOMAIN = $USERDNSDOMAIN
 #$b.customEvents.stringProperties.TPICAPLOCATION = $TPICAPLOCATION
