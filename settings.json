@@ -1,12 +1,13 @@
 {
     "key": "EUM-AAB-AUM",
     "url": "http://controller204-2040noss-rmqbqgqi.appd-cx.com:7001",
-    "event_log_source": [{
-            "Application": ["license", "test"]
+
+    "windows_events_log": [{
+            "Application": ["start", "searchstring_2"]
         },
         {
-            "System": ["license"]
+            "System": ["searchstring_1"]
         }
     ],
-    "interval_mins": 1
+    "windows_events_search_interval_mins": 30
 }

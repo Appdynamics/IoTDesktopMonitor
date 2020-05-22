@@ -9,10 +9,14 @@ if ($base_location -eq "") {
 }
 
 $config_json = Get-Content -Path "$($base_location)/settings.json" | ConvertFrom-Json
-
-$now = Get-Date
-# $unixEpochStart = New-Object DateTime 1970, 1, 1, 0, 0, 0, ([DateTimeKind]::Utc)
-# $unix_timestamp = [int64]((([datetime]$now) - $unixEpochStart).TotalMilliseconds)
+function PrepValue($var) {
+    #Because AppD IoT platform doesn't like "" or null. 
+    If ([string]::IsNullOrEmpty($var)) {            
+        # Write-Host "Variable is Null"  
+        $var = '"null"'     
+    } 
+    return $var
+}
 function ConvertTo-UnixTimestamp {
     $epoch = Get-Date -Year 1970 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0
     $input | ForEach-Object {
@@ -20,8 +24,12 @@ function ConvertTo-UnixTimestamp {
         Write-Output $milliSeconds
     }
 }
+$now = Get-Date
 $unix_timestamp = $now | ConvertTo-UnixTimestamp
-# $unix_timestamp  = [int](Get-Date -UFormat %s) * 1000
+
+#$unix_timestamp  = [int](Get-Date -UFormat %s) * 1000
+
+Write-Host $unix_timestamp
 
 # $status_code = (Invoke-WebRequest -Uri "$($config_json.url)/eumcollector/iot/v1/application/$($config_json.key)/enabled").StatusCode
 
@@ -30,18 +38,18 @@ $memory_cal = ((($desktop_details.TotalVisibleMemorySize - $desktop_details.Free
 
 $memory_utilisation = [math]::Round($memory_cal, 2)
 
-$total_visible_memorySize =  $desktop_details | Measure-Object -Property TotalVisibleMemorySize -Sum | ForEach-Object {[Math]::Round($_.sum/1024/1024)}
+$total_visible_memorySize = $desktop_details | Measure-Object -Property TotalVisibleMemorySize -Sum | ForEach-Object { [Math]::Round($_.sum/1024/1024) }
 
-$free_physical_memory = $desktop_details | Measure-Object -Property FreePhysicalMemory -Sum | ForEach-Object {[Math]::Round($_.sum/1024/1024)}
+$free_physical_memory = $desktop_details | Measure-Object -Property FreePhysicalMemory -Sum | ForEach-Object { [Math]::Round($_.sum/1024/1024) }
 
 #let's do the %tage calc in AppD 
 #$disk_utilisation = (Get-WmiObject -Class Win32_logicaldisk -Filter "DeviceID = 'C:'"  -ErrorAction SilentlyContinue `
 #                    | Select-Object name,freespace,size,@{Name='util';Expression={($_.freespace / $_.size)*100}}).util
 
 $drive_c = Get-WmiObject -Class Win32_logicaldisk -Filter "DeviceID = 'C:'"  -ErrorAction SilentlyContinue `
-           | Select-Object -Property DeviceID, DriveType, VolumeName, 
-            @{L='FreeSpaceGB';E={"{0:N2}" -f ($_.FreeSpace /1GB)}},
-            @{L="Capacity";E={"{0:N2}" -f ($_.Size/1GB)}}
+| Select-Object -Property DeviceID, DriveType, VolumeName, 
+@{L = 'FreeSpaceGB'; E = { "{0:N2}" -f ($_.FreeSpace /1GB) } },
+@{L = "Capacity"; E = { "{0:N2}" -f ($_.Size/1GB) } }
 
 $disk_free = $drive_c.FreeSpaceGB
 
@@ -54,8 +62,8 @@ Write-Host "Please wait... `n" -ForegroundColor Yellow
 # Make the Call ones per excution for optimal performance - top processes will also be derived from this result. 
 
 $cpu_util_call = Get-Counter "\Process(*)\% Processor Time" -SampleInterval 2 -MaxSamples 5  -ErrorAction SilentlyContinue `
-                 | Select-Object -ExpandProperty CounterSamples `
-                 | Where-Object {$_.Status -eq 0 -and $_.instancename -notin "_total", "idle"} 
+| Select-Object -ExpandProperty CounterSamples `
+| Where-Object { $_.Status -eq 0 -and $_.instancename -notin "_total", "idle" } 
 
 $cpu_utilisation = ($cpu_util_call | Select-Object -ExpandProperty CookedValue | Measure-Object -Average).average.ToString("P")    
  
@@ -64,30 +72,21 @@ Write-Host "Average of CPU usage (calculated with 5 Sample with interval of 2 se
 Write-Host "`n Calculate Top 5 CPU processes that are consuming CPU - over the sample period `n" -ForegroundColor Yellow
 
 $top_cpu_processes = $cpu_util_call `
-                    | sort CookedValue -Descending | Select-Object -First 5 `
-                    | Select-Object TimeStamp,
-                    @{N="Name";E={ $_.InstanceName  }},
-                    @{N="Id";E={[System.Diagnostics.Process]::GetProcessesByName($_.InstanceName)[0].Id}},
-                    @{N="CPU";E={($_.CookedValue/100/$env:NUMBER_OF_PROCESSORS).ToString("P")}} 
+| sort CookedValue -Descending | Select-Object -First 5 `
+| Select-Object TimeStamp,
+@{N = "Name"; E = { $_.InstanceName } },
+@{N = "Id"; E = { [System.Diagnostics.Process]::GetProcessesByName($_.InstanceName)[0].Id } },
+@{N = "CPU"; E = { ($_.CookedValue/100/$env:NUMBER_OF_PROCESSORS).ToString("P") } } 
 
- #this approach is faster than the native wmiobject
+#this approach is faster than the native wmiobject
 $top_mem_processes = Get-Process | Sort-Object -Descending WS `
-                    | Select-Object -First 5 `
-                    | Select-Object name, description, id, @{l = "Private Memory (MB)"; e = { ([math]::Round($_.privatememorysize/1Mb,2)) } }
+| Select-Object -First 5 `
+| Select-Object name, description, id, @{l = "Private Memory (MB)"; e = { ([math]::Round($_.privatememorysize/1Mb, 2)) } }
 
-
-function PrepValue($var){
-    #Because AppD IoT platform doesn't like "" or null. 
-    If([string]::IsNullOrEmpty($var)){            
-       # Write-Host "Variable is Null"  
-       $var = '"null"'     
-    } 
-    return $var
-}
 
 #Gloabl variable initialisations...
 
-$lastbootuptime = $desktop_details | Select-Object @{label='LastRestart';expression={$_.ConvertToDateTime($_.LastBootUpTime)}}
+$lastbootuptime = $desktop_details | Select-Object @{label = 'LastRestart'; expression = { $_.ConvertToDateTime($_.LastBootUpTime) } }
 $lastbootuptime = $lastbootuptime.LastRestart 
 
 $NUMBER_OF_PROCESSORS = $env:NUMBER_OF_PROCESSORS
@@ -107,13 +106,13 @@ $TPICAPUSERREGION = PrepValue($env:TPICAPUSERREGION)
 $TPICAPREGION = PrepValue($env:TPICAPREGION)
 $TPICAPSITE = PrepValue($env:TPICAPSITE)
 $LOGONSERVER = PrepValue($env:LOGONSERVER)
-$LOGONSERVER = $LOGONSERVER  -replace "\\","" #Strip \\ coz AppD IoT platform doesn't like it. 
+$LOGONSERVER = $LOGONSERVER -replace "\\", "" #Strip \\ coz AppD IoT platform doesn't like it. 
 $TPICAPUSERSITE = PrepValue($env:TPICAPUSERSITE)
 
 $deviceID = $COMPUTERNAME + "_" + ${$env:TPICAPSITE}
 #$deviceName = $COMPUTERNAME + "_" + ${env:$USERNAME}
-$os_details  =  "OS:" + $OS +". BuildNumber:"+ $desktop_details.BuildNumber +". BuildType:"+ $desktop_details.BuildType 
-$hardware_serial_number = "SN:"+ $desktop_details.SerialNumber
+$os_details = "OS:" + $OS + ". BuildNumber:" + $desktop_details.BuildNumber + ". BuildType:" + $desktop_details.BuildType 
+$hardware_serial_number = "SN:" + $desktop_details.SerialNumber
 $processor_info = "Processor Info - Core:" + $NUMBER_OF_PROCESSORS + ". Revision:" + $PROCESSOR_REVISION + ". Level:$PROCESSOR_LEVEL"
 
 $user_location = "TPICAPUSERLOCATION: $TPICAPUSERLOCATION TPICAPLOCATION: $TPICAPLOCATION . TPICAPUSERREGION: $TPICAPUSERREGION . TPICAPREGION: $TPICAPREGION  TPICAPSITE: $TPICAPSITE "
@@ -164,7 +163,7 @@ $a.customEvents.stringProperties.STXHD_PERFORMANCE = $STXHD_PERFORMANCE
 
 #$a.customEvents.stringProperties.STXHD_REGION = $STXHD_REGION
 
-$a | ConvertTo-Json -Compress -Depth 3 | set-content "$($base_location)/json/base_beacon_new.json"
+$a | ConvertTo-Json -Compress -Depth 3 | Set-Content "$($base_location)/json/base_beacon_new.json"
 
 $Params = @{
     Method  = 'Post'
@@ -174,13 +173,21 @@ $Params = @{
 
 $body = $a | ConvertTo-Json -Compress -Depth 3
 
-write-host "`n Sending base metrics to AppDynamics IoT Platform...`n"  -ForegroundColor Yellow
+Write-Host "`n Sending base metrics to AppDynamics IoT Platform...`n"  -ForegroundColor Yellow
 
-Invoke-RestMethod -v @Params -Body ("[" + $body + "]")
+try {
+    Invoke-RestMethod -v @Params -Body ("[" + $body + "]")
+}
+catch {
+    Write-Warning "$($error[0])"
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
+    Write-Host "ErrorMessage:" $_.Exception.Message -ForegroundColor Red 
+}
 
-write-host "=========request body====="
-write-host $body
-write-host "==========================="
+Write-Host "=========request body====="
+Write-Host $body
+Write-Host "==========================="
 
 
 $b = Get-Content "$($base_location)/json/cpu_procs.json" -raw | ConvertFrom-Json
@@ -219,28 +226,28 @@ $b.customEvents.stringProperties.cpu3_process = $top_cpu_processes[2].Name
 $b.customEvents.stringProperties.cpu4_process = $top_cpu_processes[3].Name
 $b.customEvents.stringProperties.cpu5_process = $top_cpu_processes[4].Name
 
-$b.customEvents.stringProperties.cpu1_id =  [String]($top_cpu_processes[0].Id)
-$b.customEvents.stringProperties.cpu2_id =  [String]($top_cpu_processes[1].Id)
-$b.customEvents.stringProperties.cpu3_id =  [String]($top_cpu_processes[2].Id)
+$b.customEvents.stringProperties.cpu1_id = [String]($top_cpu_processes[0].Id)
+$b.customEvents.stringProperties.cpu2_id = [String]($top_cpu_processes[1].Id)
+$b.customEvents.stringProperties.cpu3_id = [String]($top_cpu_processes[2].Id)
 $b.customEvents.stringProperties.cpu4_id = [String]($top_cpu_processes[3].Id)
 $b.customEvents.stringProperties.cpu5_id = [String]($top_cpu_processes[4].Id)
 
 $b.customEvents.doubleProperties.cpu1_value = [double]($top_cpu_processes[0].CPU -replace "%", "")
 $b.customEvents.doubleProperties.cpu2_value = [double]($top_cpu_processes[1].CPU -replace "%", "" )
 $b.customEvents.doubleProperties.cpu3_value = [double]($top_cpu_processes[2].CPU -replace "%", "")
-$b.customEvents.doubleProperties.cpu4_value = [double]($top_cpu_processes[3].CPU  -replace "%", "")
+$b.customEvents.doubleProperties.cpu4_value = [double]($top_cpu_processes[3].CPU -replace "%", "")
 $b.customEvents.doubleProperties.cpu5_value = [double]($top_cpu_processes[4].CPU -replace "%", "")
 
-$b | ConvertTo-Json -Compress -Depth 3 | set-content "$($base_location)/json/cpu_procs_new.json"
+$b | ConvertTo-Json -Compress -Depth 3 | Set-Content "$($base_location)/json/cpu_procs_new.json"
 
 $body2 = $b | ConvertTo-Json -Compress -Depth 3
 
-write-host "`n Sending TOP CPU Consumption Metrics to AppDynamics IoT Platform...`n"  -ForegroundColor Yellow
+Write-Host "`n Sending TOP CPU Consumption Metrics to AppDynamics IoT Platform...`n"  -ForegroundColor Yellow
 
 Invoke-RestMethod -v @Params -Body ("[" + $body2 + "]")
-write-host "=========request body====="
-write-host $body2
-write-host "==========================="
+Write-Host "=========request body====="
+Write-Host $body2
+Write-Host "==========================="
 
 $c = Get-Content "$($base_location)/json/mem_procs.json" -raw | ConvertFrom-Json
 
@@ -288,29 +295,38 @@ $c.customEvents.doubleProperties.mem2_value = $top_mem_processes[1].'Private Mem
 $c.customEvents.doubleProperties.mem3_value = $top_mem_processes[2].'Private Memory (MB)'
 $c.customEvents.doubleProperties.mem4_value = $top_mem_processes[2].'Private Memory (MB)'
 $c.customEvents.doubleProperties.mem5_value = $top_mem_processes[4].'Private Memory (MB)'
-$c | ConvertTo-Json -Compress -Depth 3 | set-content "$($base_location)/json/mem_procs_new.json"
+$c | ConvertTo-Json -Compress -Depth 3 | Set-Content "$($base_location)/json/mem_procs_new.json"
 
 $body3 = $c | ConvertTo-Json -Compress -Depth 3
 
-write-host "`n Sending TOP Memory Consumption Metrics to AppDynamics IoT Platform..." -ForegroundColor Yellow
+Write-Host "`n Sending TOP Memory Consumption Metrics to AppDynamics IoT Platform..." -ForegroundColor Yellow
 
-Invoke-RestMethod -v @Params -Body ("[" + $body3 + "]")
+try {
+    Invoke-RestMethod -v @Params -Body ("[" + $body3 + "]")
+}
+catch {
+    Write-Warning "$($error[0])"
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
+    Write-Host "ErrorMessage:" $_.Exception.Message -ForegroundColor Red 
+}
 
-write-host "=========response body====="
-write-host $body3
-write-host "==========================="
+Write-Host "=========response body====="
+Write-Host $body3
+Write-Host "==========================="
 
-$Begin = $now.AddSeconds(0 - $config_json.interval_mins*60)
-write-host "Searching Windows events logs for pre-configured search strings ..." -ForegroundColor Yellow
-# foreach ($log_source in $config_json.event_log_source) {
-foreach ($log_type in $config_json.event_log_source) {
+$Begin = $now.AddSeconds(0 - $config_json.windows_events_search_interval_mins*60)
+Write-Host "Searching Windows events logs for pre-configured search strings ... `n" -ForegroundColor Yellow
+foreach ($log_type in $config_json.windows_events_log) {
     # foreach ($search_term in $config_json.message_contains) {
     foreach ($search_term in $log_type.PSObject.Properties.Value) {
         Write-Host "`n Searching for * $search_term * in *" $log_type.PSObject.Properties.Name "* Windows Events `n" -ForegroundColor Yellow
-
         $ev = Get-EventLog -LogName $log_type.PSObject.Properties.Name -Message *$search_term* -After $Begin -Before $now
+        #$ev
+        #$ev.PSObject.Properties.Name
+       
         if ($ev.Count -gt 0) {
-            write-host " `n Found windows events logs `n"
+            Write-Host " `n Found"+ $ev.Count +"Windows Event(s)`n"
             foreach ($elem in $ev) {
                 $d = Get-Content "$($base_location)/json/event.json" -raw | ConvertFrom-Json
                 
@@ -325,48 +341,47 @@ foreach ($log_type in $config_json.event_log_source) {
                 $d.customevents.timestamp = $unix_timestamp
                 $d.customEvents.stringProperties.USERNAME = $USERNAME
                 
-                #$d.customEvents.stringProperties.TPICAPUSERLOCATION = $TPICAPUSERLOCATION
-                #$d.customEvents.stringProperties.USERDNSDOMAIN = $USERDNSDOMAIN
-                #$d.customEvents.stringProperties.TPICAPLOCATION = $TPICAPLOCATION
-                #$d.customEvents.stringProperties.TPICAPUSERREGION = $TPICAPUSERREGION
-                #$d.customEvents.stringProperties.TPICAPREGION = $TPICAPREGION
-                #$d.customEvents.stringProperties.TPICAPSITE = $TPICAPSITE
-                #$d.customEvents.stringProperties.LOGONSERVER = $LOGONSERVER
-                #$d.customEvents.stringProperties.TPICAPUSERSITE = $TPICAPUSERSITE
-                
-                $d.customevents.event_id = $elem.EventID
-                $d.customevents.event_machine_name = $elem.MachineNames
-                $d.customevents.event_data = $elem.Data
-                $d.customevents.event_index = $elem.Index
-                $d.customevents.event_category = $elem.Category
-                $d.customevents.event_category_number = $elem.CategoryNumber
-                $d.customevents.event_entry_type = $elem.EntryType
-                $d.customevents.event_message = $elem.Message
-                $d.customevents.event_source = $elem.Source
-                $d.customevents.event_replacement_string = $elem.ReplacementStrings
-                $d.customevents.event_instance_id = $elem.InstanceId
-                $d.customevents.event_username = $elem.UserName
-                $d.customevents.event_site = $elem.Site
-                $d.customevents.event_container = $elem.Container
-                $d.datetimeProperties.event_time_generated = (Get-Date -Date $elem.TimeGenerated -UFormat %s) + "000"
-                $d.datetimeProperties.event_time_written = (Get-Date -Date $elem.TimeWritten -UFormat %s) + "000"
+                $d.customEvents.stringProperties.USERLOCATION = $TPICAPUSERLOCATION
+                $d.customEvents.stringProperties.USERDNSDOMAIN = $USERDNSDOMAIN
+                $d.customEvents.stringProperties.USERREGION = $TPICAPUSERREGION
+                $d.customEvents.stringProperties.ORGREGION = $TPICAPREGION
+                $d.customEvents.stringProperties.AWSREGION = $TPICAPSITE
+                $d.customEvents.stringProperties.LOGONSERVER = $LOGONSERVER
+                $d.customEvents.stringProperties.USERSITE = $TPICAPUSERSITE
+             
+                $d.customevents.stringProperties.EventID = $elem.EventID
+                $d.customevents.stringProperties.EventCategory = $elem.Category
+                $d.customevents.stringProperties.EventEntryType = $elem.EntryType
+                $d.customevents.stringProperties.EventMessage = $elem.Message
+                $d.customevents.stringProperties.EventSource = $elem.Source
+                $d.customevents.stringProperties.EventInstanceID = $elem.InstanceId
+                $d.customevents.stringProperties.EventUserName = $elem.UserName
+                $d.customevents.stringProperties.USERNAME = $USERNAME
+                $d.customevents.datetimeProperties.EventTimeGenerated = (Get-Date -Date $elem.TimeGenerated -UFormat %s) + "000"
+                $d.customevents.datetimeProperties.EventTimeWritten = (Get-Date -Date $elem.TimeWritten -UFormat %s) + "000"
 
-                $d | ConvertTo-Json -Compress -Depth 3 | set-content "$($base_location)/json/event_new.json"
+                $d | ConvertTo-Json -Compress -Depth 3 | Set-Content "$($base_location)/json/event_new.json"
                 $body4 = $d | ConvertTo-Json -Compress -Depth 3
 
-                write-host " `n Sending Windows events logs to AppDynamics. `n" -ForegroundColor Yellow
+                Write-Host " `n Sending Windows events logs to AppDynamics. `n" -ForegroundColor Yellow
+                try {
+                    Invoke-RestMethod -v @Params -Body ("[" + $body4 + "]")
+                }
+                catch {
+                    Write-Warning "$($error[0])"
+                    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
+                    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
+                    Write-Host "ErrorMessage:" $_.Exception.Message -ForegroundColor Red 
+                }
 
-                Invoke-RestMethod -v @Params -Body ("[" + $body4 + "]")
-
-                write-host "=========response body====="
-                write-host $body4
-                write-host "==========================="
-
+                Write-Host "=========response body====="
+                Write-Host $body4
+                Write-Host "==========================="
             }
         }
         else {
 
-            write-host "No result found " -ForegroundColor Yellow
+            Write-Host "No result found " -ForegroundColor Yellow
 
         }
     }
