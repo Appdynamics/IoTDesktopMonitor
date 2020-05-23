@@ -4,11 +4,74 @@ Param (
     [string]$base_location
 )
 
-if ($base_location -eq "") {
-    $base_location = "C:\Program Files\AppDynamics\IoT"
+if ([string]::IsNullOrEmpty($base_location)) {
+    #if ($base_location -eq "") {
+    $base_location = $PSScriptRoot
+    
+    if (!(Test-Path "$($base_location)/settings.json")) {
+        #Recommended location
+        $base_location = "C:\Program Files\AppDynamics\AppDWorkSpaceMonitor"
+    }
+}
+
+Write-Host "Base Path - $base_location `n"
+
+if (!(Test-Path "$($base_location)/settings.json")) {
+
+    Write-Host "*********************************************************************************** `n 
+    This is weird, I know...but please bear with us. You've run into a Windows's Scheduler Problem `n 
+    We are unable to locate the path to this script. You must define an explicit full location of the folder containing this script for it work - `n 
+    this is because Windows Scheduler doesn't understand the implicit .\ home path and it often fails to interpret th PSScriptRoot command.`n 
+    You have two options:
+    1. Either copy the content of the package into the default recommended location at $base_location  or
+    2. Locate where this script is ($PSScriptRoot), then pass it as argument in the command line. for example: .\workspace_monitor.ps1 -base_location 'full path' `n" -ForegroundColor RED
+
 }
 
 $config_json = Get-Content -Path "$($base_location)/settings.json" | ConvertFrom-Json
+
+############## Logging initialisations ##############
+$LogDir = ".\logs"
+$ilogFile = "log.txt"
+
+$LogPath = $LogDir + '\' + $iLogFile
+
+#Load Logger Function - relative path
+# Function to Write into Log file
+Function Write-Log {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $False)]
+        [ValidateSet("INFO", "WARN", "ERROR", "FATAL", "DEBUG")]
+        [String]
+        $Level = "INFO",
+
+        [Parameter(Mandatory = $True)]
+        [string]
+        $Message,
+
+        [Parameter(Mandatory = $False)]
+        [string]
+        $logfile
+    )
+
+    $Stamp = (Get-Date).toString("yyyy/MM/dd HH:mm:ss")
+    $Line = "$Stamp $Level $Message"
+    if ($logfile) {
+        Add-Content $logfile -Value $Line
+    }
+    else {
+        Write-Output $Line
+    }
+}
+
+#Checking for existence of logfolders and files if not create them.
+if (!(Test-Path $LogDir)) {
+    New-Item -Path $LogDir -ItemType directory
+    New-Item -Path $LogDir -Name $iLogFile -ItemType File
+    Write-Host INFO "Created $LogDir" $LogPath
+}
+
 function PrepValue($var) {
     #Because AppD IoT platform doesn't like "" or null. 
     If ([string]::IsNullOrEmpty($var)) {            
@@ -24,12 +87,10 @@ function ConvertTo-UnixTimestamp {
         Write-Output $milliSeconds
     }
 }
+
+
 $now = Get-Date
 $unix_timestamp = $now | ConvertTo-UnixTimestamp
-
-#$unix_timestamp  = [int](Get-Date -UFormat %s) * 1000
-
-Write-Host $unix_timestamp
 
 # $status_code = (Invoke-WebRequest -Uri "$($config_json.url)/eumcollector/iot/v1/application/$($config_json.key)/enabled").StatusCode
 
@@ -180,9 +241,10 @@ try {
 }
 catch {
     Write-Warning "$($error[0])"
-    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
-    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
-    Write-Host "ErrorMessage:" $_.Exception.Message -ForegroundColor Red 
+    $msg = "Error occured in sending Infra Monitoring Base Metrics `n Code "+ $_.Exception.Response.StatusCode.value__ +" `n Message Details"+ $_.Exception.Message + " `n StatusDescription:" + $_.Exception.Response.StatusDescription 
+    Write-Host $msg -ForegroundColor Red
+    Write-Log DEBUG $msg $LogPath
+    
 }
 
 Write-Host "=========request body====="
@@ -243,8 +305,16 @@ $b | ConvertTo-Json -Compress -Depth 3 | Set-Content "$($base_location)/json/cpu
 $body2 = $b | ConvertTo-Json -Compress -Depth 3
 
 Write-Host "`n Sending TOP CPU Consumption Metrics to AppDynamics IoT Platform...`n"  -ForegroundColor Yellow
-
+try{
 Invoke-RestMethod -v @Params -Body ("[" + $body2 + "]")
+}
+catch {
+    Write-Warning "$($error[0])"
+    $msg = "Error occured in sending Top CPU metrics `n Code "+ $_.Exception.Response.StatusCode.value__ +" `n Message Details"+ $_.Exception.Message + " `n StatusDescription:" + $_.Exception.Response.StatusDescription 
+    Write-Host $msg -ForegroundColor Red
+    Write-Log DEBUG $msg $LogPath
+    
+}
 Write-Host "=========request body====="
 Write-Host $body2
 Write-Host "==========================="
@@ -306,9 +376,9 @@ try {
 }
 catch {
     Write-Warning "$($error[0])"
-    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
-    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
-    Write-Host "ErrorMessage:" $_.Exception.Message -ForegroundColor Red 
+    $msg = "Error occured in sending Top CPU metrics `n Code "+ $_.Exception.Response.StatusCode.value__ +" `n Message Details"+ $_.Exception.Message + " `n StatusDescription:" + $_.Exception.Response.StatusDescription 
+    Write-Host $msg -ForegroundColor Red
+    Write-Log DEBUG $msg $LogPath 
 }
 
 Write-Host "=========response body====="
@@ -369,16 +439,15 @@ foreach ($log_type in $config_json.windows_events_log) {
                 }
                 catch {
                     Write-Warning "$($error[0])"
-                    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
-                    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
-                    Write-Host "ErrorMessage:" $_.Exception.Message -ForegroundColor Red 
+                    $msg = "Error occured in sending Infra Monitoring Base Metrics `n Code "+ $_.Exception.Response.StatusCode.value__ +" `n Message Details"+ $_.Exception.Message + " `n StatusDescription:" + $_.Exception.Response.StatusDescription 
+                    Write-Host $msg -ForegroundColor Red
+                    Write-Log DEBUG $msg $LogPath
                 }
-
                 Write-Host "=========response body====="
                 Write-Host $body4
                 Write-Host "==========================="
-            }
         }
+    }
         else {
 
             Write-Host "No result found " -ForegroundColor Yellow
