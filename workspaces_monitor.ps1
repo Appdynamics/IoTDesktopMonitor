@@ -53,7 +53,6 @@ function Write-Log {
         [string]
         $logfile
     )
-
     $Stamp = (Get-Date).toString("yyyy/MM/dd HH:mm:ss")
     $Line = "$Stamp $Level $Message"
     if ($logfile) {
@@ -70,7 +69,6 @@ if (!(Test-Path $LogDir)) {
     New-Item -Path $LogDir -Name $iLogFile -ItemType File
     Write-Host INFO "Created $LogDir" $LogPath
 }
-
 function PrepValue($var) {
     If ([string]::IsNullOrEmpty($var)) {            
         # Write-Host "Variable is Null"  
@@ -86,19 +84,14 @@ function ConvertTo-UnixTimestamp {
     }
 }
 
-
 $now = Get-Date
 $unix_timestamp = $now | ConvertTo-UnixTimestamp
-
 # $status_code = (Invoke-WebRequest -Uri "$($config_json.url)/eumcollector/iot/v1/application/$($config_json.key)/enabled").StatusCode
-
 $desktop_details = Get-WmiObject  -Class win32_operatingsystem  -ErrorAction SilentlyContinue 
 $memory_cal = ((($desktop_details.TotalVisibleMemorySize - $desktop_details.FreePhysicalMemory)*100)/ $desktop_details.TotalVisibleMemorySize)
 
 $memory_utilisation = [math]::Round($memory_cal, 2)
-
 $total_visible_memorySize = $desktop_details | Measure-Object -Property TotalVisibleMemorySize -Sum | ForEach-Object { [Math]::Round($_.sum/1024/1024) }
-
 $free_physical_memory = $desktop_details | Measure-Object -Property FreePhysicalMemory -Sum | ForEach-Object { [Math]::Round($_.sum/1024/1024) }
 
 #let's do the %tage calc in AppD 
@@ -162,7 +155,8 @@ $LOGONSERVER = PrepValue($env:LOGONSERVER)
 $LOGONSERVER = $LOGONSERVER -replace "\\", "" #Strip \\ coz AppD IoT platform doesn't like it. 
 $TPICAPUSERSITE = PrepValue($env:TPICAPUSERSITE)
 
-$deviceID = $COMPUTERNAME + "_" + ${$env:TPICAPSITE}
+$deviceID = $USERNAME + "_" + $COMPUTERNAME + "_" + $TPICAPUSERSITE +"_"+ $env:TPICAPSITE
+
 #$deviceName = $COMPUTERNAME + "_" + ${env:$USERNAME}
 $os_details = "OS:" + $OS + ". BuildNumber:" + $desktop_details.BuildNumber + ". BuildType:" + $desktop_details.BuildType 
 $hardware_serial_number = "SN:" + $desktop_details.SerialNumber
@@ -189,8 +183,7 @@ function PayloadBuilder ($reqHandle) {
     $reqHandle.versionInfo.firmwareVersion = $processor_info
     
     $reqHandle.customevents.timestamp = $unix_timestamp
-    $reqHandle.customEvents.stringProperties.USERNAME = $USERNAME
-    
+    $reqHandle.customEvents.stringProperties.USERNAME = $USERNAME   
 }
 
 ############## Infra CPU, Disk and Mem Monitoring ##############
@@ -244,6 +237,7 @@ try {
     Write-Host "=========rinfra monitor request body====="
     Write-Host $infra_req_payload
     Write-Host "==========================="
+    Write-Log INFO "Sent metrics successfully for $USERNAME" $LogPath
 }
 catch {
     Write-Warning "$($error[0])"
@@ -287,7 +281,7 @@ $top_cpu_req_payload = $top_cpu_req | ConvertTo-Json -Compress -Depth 3
 Write-Host "`n Sending TOP CPU Procs Metrics to the AppDynamics IoT Platform...`n"  -ForegroundColor Yellow
 try {
     Invoke-RestMethod -v @Params -Body ("[" + $top_cpu_req_payload + "]")
-    Write-Host "=========request body====="
+    Write-Host "========= Top CPU request body====="
     Write-Host $top_cpu_req_payload
     Write-Host "==========================="
 }
@@ -295,8 +289,7 @@ catch {
     Write-Warning "$($error[0])"
     $msg = "Error occured in sending Top CPU metrics `n Code: " + $_.Exception.Response.StatusCode.value__ + " `n Message Details: " + $_.Exception.Message + " `n StatusDescription: " + $_.Exception.Response.StatusDescription 
     Write-Host $msg -ForegroundColor Red
-    Write-Log FATAL $msg $LogPath
-    
+    Write-Log FATAL $msg $LogPath    
 }
 
 ############## TOP Memory Procs ##############
@@ -335,7 +328,7 @@ Write-Host "`n Sending TOP Memory Consumption Metrics to AppDynamics IoT Platfor
 
 try {
     Invoke-RestMethod -v @Params -Body ("[" + $top_mem_req_payload + "]")
-    Write-Host "=========response body====="
+    Write-Host "=========Top Memory Request====="
     Write-Host $top_mem_req_payload
     Write-Host "==========================="
 }
@@ -395,7 +388,7 @@ foreach ($log_type in $config_json.windows_events_log) {
                 try {
                     Invoke-RestMethod -v @Params -Body ("[" + $windows_event_req_payload + "]")
 
-                    Write-Host "=========response body====="
+                    Write-Host "=========Windows Events Logs Request Body====="
                     Write-Host $windows_event_req_payload
                     Write-Host "==========================="
                  
@@ -412,7 +405,6 @@ foreach ($log_type in $config_json.windows_events_log) {
         else {
 
             Write-Host "No result found " -ForegroundColor Yellow
-
         }
     }
 }

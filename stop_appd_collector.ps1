@@ -1,0 +1,1 @@
+Get-WmiObject -Class win32_process -Filter "name='powershell.exe'" | Where-Object {$_.CommandLine -imatch "appd"} | Foreach-Object{Stop-Process -Id $_.ProcessId}

@@ -1,9 +1,9 @@
 {
-    "key": "EC-AAB-JUX",
-    "url": "https://fra-iot-col.eum-appdynamics.com",
+    "key": "EUM-AAB-AUM",
+    "url": "http://controller204-2040noss-rmqbqgqi.appd-cx.com:7001",
 
     "windows_events_log": [{
-            "Application": ["VSS", "searchstring_2"]
+            "Application": ["start", "searchstring_2"]
         },
         {
             "System": ["searchstring_1"]
